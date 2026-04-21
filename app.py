@@ -1,19 +1,17 @@
 import streamlit as st
 
-messages = [
-    {
-        "role":"User",
-        "content":"Hello"
-    },
-    {
-        "role":"AI Assistant",
-        "content":"Hello! How can I assist you today?"
-    }
-]
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
 
-for message in messages:
+for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-st.chat_input("Type your message here...")
+user_input = st.chat_input("Type your message here...")
+
+if user_input:
+    with st.chat_message("User"):
+        st.markdown(user_input)
+    st.session_state.messages.append({"role": "User", "content": user_input})
