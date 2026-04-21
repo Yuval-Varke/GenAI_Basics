@@ -1,4 +1,10 @@
 import streamlit as st
+from google import genai
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 
 if "messages" not in st.session_state:
@@ -15,3 +21,13 @@ if user_input:
     with st.chat_message("User"):
         st.markdown(user_input)
     st.session_state.messages.append({"role": "User", "content": user_input})
+
+    res = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=list(map(lambda message:message['role'] + " : " + message['content'], st.session_state.messages))
+    )
+
+    st.session_state.messages.append({"role": "AI Assistant", "content": res.text})
+
+    with st.chat_message("AI Assistant"):
+        st.markdown(res.text)
