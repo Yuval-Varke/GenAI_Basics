@@ -12,6 +12,14 @@ load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 # ------------------ TOOL ------------------
+
+def run_command(cmd:str):
+    result = os.system(cmd)
+    return result
+
+
+
+
 def get_weather(city: str):
     url = f"https://wttr.in/{city.lower()}?format=%C+%t"
     response = requests.get(url)
@@ -24,7 +32,8 @@ def get_weather(city: str):
 
 
 available_tools = {
-    "get_weather": get_weather
+    "get_weather": get_weather,
+    "run_command": run_command
 }
 
 # ------------------ SYSTEM PROMPT ------------------
@@ -59,7 +68,9 @@ JSON format:
 }
 
 Available tool:
-get_weather(city: str)
+- get_weather(city: str) : Takes a city name as a string and returns the current weather for that city.
+- run_command(cmd: str) : Takes a system command as a string and executes the command on the user's system and returns the output from that command.
+
 
 Example:
 
