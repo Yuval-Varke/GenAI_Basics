@@ -1,9 +1,11 @@
 from google import genai
+from google.genai import types
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field
+from typing import Optional
 import os
 import requests
 import json
-import re
 
 load_dotenv()
 
@@ -78,18 +80,23 @@ User: What is the weather in Ahmedabad and Indore?
 { "step": "OUTPUT", "content": "Ahmedabad: <weather>, Indore: <weather>" }
 """
 
-# ------------------ HELPERS ------------------
-def clean_json(text):
-    if text is None:
-        return None
-    text = re.sub(r"```json\s*|\s*```", "", text.strip())
-    return text
+
+class MyOutputFormat(BaseModel) :
+    step: str = Field(..., description="The ID of the step. Example: PLAN, OUTPUT, TOOL, etc")
+    content: Optional[str] = Field(None, description="The optional string content for the step")
+    tool: Optional[str] = Field(None, description="The ID of the tool to call.")
+    input: Optional[str] = Field(None, description="The input params for the tool")
+
 
 
 # ------------------ MAIN ------------------
 def main():
     while True:
         user_query = input("👉 ")
+
+        if user_query.lower() in ["exit", "quit"]:
+            print("Exiting...")
+            break
 
         message_history = SYSTEM_PROMPT + f"\nUser: {user_query}\n"
 
@@ -102,7 +109,11 @@ def main():
 
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
-                contents=message_history
+                contents=message_history,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=MyOutputFormat,
+                ),
             )
 
             raw_result = response.text
@@ -111,26 +122,31 @@ def main():
                 print("⚠️ Empty response.")
                 break
 
-            cleaned = clean_json(raw_result)
 
             try:
-                parsed = json.loads(cleaned)
+                parsed_result = response.parsed
             except Exception:
                 print("⚠️ Invalid JSON:\n", raw_result)
                 break
 
-            step = parsed.get("step")
+            if parsed_result is None:
+                print("⚠️ Could not parse structured output. Raw response:\n", raw_result)
+                break
+
+            # The SDK can return either a Pydantic model or a dict depending on version.
+            if isinstance(parsed_result, dict):
+                parsed_result = MyOutputFormat.model_validate(parsed_result)
 
             # -------- HANDLE STEPS --------
-            if step == "START":
-                print("🔥", parsed.get("content"))
+            if parsed_result.step == "START":
+                print("🔥", parsed_result.content)
 
-            elif step == "PLAN":
-                print("🧠", parsed.get("content"))
+            elif parsed_result.step == "PLAN":
+                print("🧠", parsed_result.content)
 
-            elif step == "TOOL":
-                tool = parsed.get("tool")
-                city = parsed.get("input")
+            elif parsed_result.step == "TOOL":
+                tool = parsed_result.tool
+                city = parsed_result.input
 
                 # prevent duplicate calls
                 if city in called_cities:
@@ -154,12 +170,12 @@ def main():
                 message_history += f"\n{json.dumps(observation)}\n"
                 continue
 
-            elif step == "OUTPUT":
-                print("🤖", parsed.get("content"))
+            elif parsed_result.step == "OUTPUT":
+                print("🤖", parsed_result.content)
                 break
 
             # append assistant step
-            message_history += f"\n{cleaned}\n"
+            message_history += f"\n{parsed_result.model_dump_json()}\n"
 
         print("\n\n")
 
